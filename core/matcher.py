@@ -61,6 +61,36 @@ class BiometricMatcher:
 
         return mean_vector
 
+    @staticmethod
+    def compute_adaptive_threshold(sample_vectors: List[np.ndarray], min_threshold: float = 0.82, max_threshold: float = 0.96) -> float:
+        """
+        Computes an adaptive per-user similarity threshold based on the intra-sample
+        variance observed during enrollment.
+
+        Formula: threshold = μ − 2σ (clamped to [min_threshold, max_threshold])
+
+        Users with high hand variability get a looser threshold; users with
+        very stable hand geometry get a tighter threshold for higher security.
+        """
+        if len(sample_vectors) < 3:
+            return 0.90  # default if insufficient data
+
+        # Compute pairwise cosine similarities between all enrollment samples
+        n = len(sample_vectors)
+        similarities = []
+        for i in range(n):
+            for j in range(i + 1, n):
+                sim = BiometricMatcher.compute_cosine_similarity(sample_vectors[i], sample_vectors[j])
+                similarities.append(sim)
+
+        mu = float(np.mean(similarities))
+        sigma = float(np.std(similarities))
+
+        # threshold = μ − 2σ (generous margin for natural variation)
+        adaptive = mu - 2.0 * sigma
+        clamped = max(min_threshold, min(max_threshold, adaptive))
+        return round(clamped, 4)
+
     @classmethod
     def match_hand(
         cls,
@@ -74,7 +104,8 @@ class BiometricMatcher:
         Parameters:
         - query_vector: 1D normalized biometric vector from the live camera.
         - enrolled_templates: List of dicts, each with keys 'user_id', 'user_name', 'vector'.
-        - threshold: Minimum cosine similarity required to grant access.
+          Optionally includes 'threshold' for per-user adaptive threshold.
+        - threshold: Global fallback minimum cosine similarity required to grant access.
 
         Returns:
         - (best_user_id, best_user_name, best_score, is_match)
@@ -85,6 +116,7 @@ class BiometricMatcher:
         best_user_id = None
         best_user_name = None
         best_similarity = -1.0
+        best_threshold = threshold
 
         for t in enrolled_templates:
             enrolled_vec = np.array(t["vector"], dtype=np.float64)
@@ -94,8 +126,10 @@ class BiometricMatcher:
                 best_similarity = sim
                 best_user_id = t["user_id"]
                 best_user_name = t.get("user_name", "Unknown")
+                # Use per-user threshold if available, otherwise global fallback
+                best_threshold = t.get("threshold", threshold) or threshold
 
-        is_match = best_similarity >= threshold
+        is_match = best_similarity >= best_threshold
         score_pct = cls.similarity_to_percentage(best_similarity)
 
         return best_user_id, best_user_name, score_pct, is_match

@@ -64,10 +64,17 @@ class Database:
                 user_id INTEGER NOT NULL UNIQUE,
                 features_json TEXT NOT NULL,
                 sample_count INTEGER DEFAULT 1,
+                threshold REAL DEFAULT 0.90,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
             );
             """)
+
+            # Migration: add threshold column if missing (for existing databases)
+            try:
+                cursor.execute("ALTER TABLE biometric_templates ADD COLUMN threshold REAL DEFAULT 0.90;")
+            except Exception:
+                pass  # Column already exists
 
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS auth_logs (
@@ -85,8 +92,8 @@ class Database:
         finally:
             conn.close()
 
-    def add_user(self, name: str, email: str, vector: np.ndarray, sample_count: int = 1) -> int:
-        """Enrolls a new user with their biometric feature vector."""
+    def add_user(self, name: str, email: str, vector: np.ndarray, sample_count: int = 1, threshold: float = 0.90) -> int:
+        """Enrolls a new user with their biometric feature vector and per-user threshold."""
         features_json = json.dumps(vector.tolist())
         conn = sqlite3.connect(self.db_path)
         try:
@@ -95,9 +102,9 @@ class Database:
             user_id = cursor.lastrowid
 
             cursor.execute("""
-            INSERT INTO biometric_templates (user_id, features_json, sample_count)
-            VALUES (?, ?, ?);
-            """, (user_id, features_json, sample_count))
+            INSERT INTO biometric_templates (user_id, features_json, sample_count, threshold)
+            VALUES (?, ?, ?, ?);
+            """, (user_id, features_json, sample_count, threshold))
             conn.commit()
             return user_id
         finally:
@@ -106,7 +113,7 @@ class Database:
     def get_all_templates(self) -> List[Dict[str, Any]]:
         """Retrieves all registered biometric templates for fast vector matching."""
         rows = self._execute("""
-        SELECT u.id as user_id, u.name as user_name, t.features_json
+        SELECT u.id as user_id, u.name as user_name, t.features_json, t.threshold
         FROM users u
         JOIN biometric_templates t ON u.id = t.user_id;
         """, fetch="all")
@@ -116,7 +123,8 @@ class Database:
             templates.append({
                 "user_id": r["user_id"],
                 "user_name": r["user_name"],
-                "vector": np.array(json.loads(r["features_json"]), dtype=np.float64)
+                "vector": np.array(json.loads(r["features_json"]), dtype=np.float64),
+                "threshold": r["threshold"] if r["threshold"] is not None else 0.90
             })
         return templates
 
@@ -173,4 +181,15 @@ class Database:
         LIMIT ?;
         """, (limit,), fetch="all")
         return [dict(r) for r in rows]
+
+    def export_all_data(self) -> Dict[str, Any]:
+        """Exports all database data for CSV/JSON download."""
+        users = self.get_all_users()
+        logs = self.get_recent_logs(limit=10000)
+        return {
+            "enrolled_users": users,
+            "total_users": len(users),
+            "auth_logs": logs,
+            "total_logs": len(logs)
+        }
 

@@ -3,119 +3,142 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Hand Biometric Authentication | Liveness Detection</title>
+  <meta name="description" content="AI-powered contactless hand biometric authentication with real-time liveness detection and spoof prevention.">
+  <title>HandAuth AI — Biometric Identity Platform</title>
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
 
-  <!-- Top Navigation Header -->
+  <!-- Animated grid overlay -->
+  <div class="grid-overlay" aria-hidden="true"></div>
+
+  <!-- ─── Header ─── -->
   <header>
     <div class="logo-group">
-      <span class="logo-icon">🖐️</span>
+      <div class="logo-icon-wrap" aria-hidden="true">🖐️</div>
       <div class="logo-text">
-        <h1>Hand Biometric Authentication</h1>
-        <p>AI-Powered Contactless Identity & Liveness Detection</p>
+        <h1>HandAuth AI</h1>
+        <p>Contactless Biometric Identity &amp; Liveness Detection</p>
       </div>
     </div>
     <div class="status-badge" id="systemStatus">
       <span class="pulse-dot"></span>
-      <span>SYSTEM ONLINE // READY</span>
+      <span>SYSTEM ONLINE</span>
     </div>
   </header>
 
-  <!-- Navigation Tabs -->
-  <div class="tabs-nav">
-    <button class="tab-btn active" onclick="switchTab('authTab')">
-      <span>🔐</span> Live Authentication
+  <!-- ─── Tab Navigation ─── -->
+  <nav class="tabs-nav" role="tablist" aria-label="Main navigation">
+    <button class="tab-btn active" id="tab-auth" role="tab" aria-selected="true"
+            aria-controls="authTab" onclick="switchTab('authTab')">
+      <span class="tab-icon">🔐</span> Live Authentication
     </button>
-    <button class="tab-btn" onclick="switchTab('registerTab')">
-      <span>👤</span> Enroll User
+    <button class="tab-btn" id="tab-enroll" role="tab" aria-selected="false"
+            aria-controls="registerTab" onclick="switchTab('registerTab')">
+      <span class="tab-icon">👤</span> Enroll User
     </button>
-    <button class="tab-btn" onclick="switchTab('logsTab')">
-      <span>📋</span> Audit Logs & Database
+    <button class="tab-btn" id="tab-logs" role="tab" aria-selected="false"
+            aria-controls="logsTab" onclick="switchTab('logsTab')">
+      <span class="tab-icon">📋</span> Audit &amp; Database
     </button>
-  </div>
+  </nav>
 
   <main>
-    <!-- TAB 1: Live Authentication -->
-    <div id="authTab" class="tab-panel active">
+
+    <!-- ═══════════════════════════════════════════
+         TAB 1 — Live Authentication
+    ═══════════════════════════════════════════ -->
+    <div id="authTab" class="tab-panel active" role="tabpanel" aria-labelledby="tab-auth">
       <div class="auth-grid">
-        
+
         <!-- Left: Live Camera Viewfinder -->
         <div class="glass-card">
           <div class="card-header">
-            <h2 class="card-title"><span>📹</span> Live Biometric Viewfinder</h2>
-            <span id="fpsCounter" style="font-size: 0.8rem; color: var(--text-muted);">Cam: Active</span>
+            <h2 class="card-title">
+              <span class="card-title-icon">📹</span>
+              Live Biometric Viewfinder
+            </h2>
+            <span id="fpsCounter" class="mono" style="font-size:0.75rem; color:var(--text-muted);">● CAM ACTIVE</span>
           </div>
 
           <div class="viewfinder-wrapper">
-            <video id="authVideo" autoplay playsinline muted style="display: none;"></video>
+            <video id="authVideo" autoplay playsinline muted style="display:none;"></video>
             <canvas id="authCanvas" class="viewfinder-feed"></canvas>
             <canvas id="hudCanvas" class="hud-overlay"></canvas>
+            <span class="vf-br-tr" aria-hidden="true"></span>
+            <span class="vf-br-bl" aria-hidden="true"></span>
           </div>
 
-          <!-- Liveness Challenge Guidance HUD (BELOW LIVE SCREEN) -->
+          <!-- Challenge HUD -->
           <div class="challenge-banner" id="challengeBanner">
             <div class="challenge-top-meta">
-              <span class="hud-badge badge-step" id="challengeStepBadge">STEP 1 OF 2</span>
-              <span class="hud-badge badge-timer" id="challengeTimer">⏱️ 6.0s</span>
+              <span class="hud-badge badge-step" id="challengeStepBadge">STANDBY</span>
+              <span class="hud-badge badge-timer" id="challengeTimer">⏱ --</span>
             </div>
-            
+
             <div class="challenge-main-instruction">
-              <div class="challenge-big-title" id="challengeBigTitle">
-                <span id="challengeIcon">🖐️</span> <span id="challengeTitle">Ready to Authenticate</span>
+              <div class="challenge-big-title">
+                <span class="icon-lg" id="challengeIcon">🖐️</span>
+                <span id="challengeTitle">Ready to Authenticate</span>
               </div>
               <p class="challenge-action-desc" id="challengeActionText">
-                Click "Start Authentication" below to begin the dynamic liveness challenge.
+                Click <strong style="color:#fff;">Start Authentication</strong> below to begin the dynamic liveness challenge.
               </p>
             </div>
 
             <div class="challenge-feedback-row" id="challengeFeedbackRow">
               <span class="feedback-label">Camera Status:</span>
-              <span class="feedback-val" id="challengeCameraFeedback">Waiting to start...</span>
+              <span class="feedback-val" id="challengeCameraFeedback">Waiting to start…</span>
             </div>
 
-            <div class="challenge-progress-bar">
-              <div id="challengeProgress" class="challenge-progress-fill"></div>
+            <div>
+              <div class="challenge-progress-bar">
+                <div id="challengeProgress" class="challenge-progress-fill"></div>
+              </div>
+              <div class="hold-status-text" id="challengeHoldText">Hold gesture steady: 0%</div>
             </div>
-            <div class="hold-status-text" id="challengeHoldText">Hold gesture steady: 0%</div>
           </div>
 
-          <div style="margin-top: 1.25rem; display: flex; gap: 1rem;">
+          <!-- Action Buttons -->
+          <div class="flex-row mt-2">
             <button class="btn btn-primary" id="startAuthBtn" onclick="startAuthenticationSession()">
               ⚡ Start Authentication
             </button>
-            <button class="btn btn-secondary" id="stopAuthBtn" onclick="cancelAuthenticationSession()" style="width: auto;">
-              Cancel
+            <button class="btn btn-secondary" id="stopAuthBtn" onclick="cancelAuthenticationSession()"
+                    style="width:auto; padding:0.7rem 1.1rem; flex-shrink:0;">
+              ✕ Cancel
             </button>
           </div>
         </div>
 
-        <!-- Right: Telemetry & Access Decision Panel -->
-        <div class="glass-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+        <!-- Right: Telemetry + Decision -->
+        <div class="glass-card" style="display:flex; flex-direction:column; gap:0; justify-content:space-between;">
           <div>
             <div class="card-header">
-              <h2 class="card-title"><span>📊</span> Real-Time Telemetry</h2>
+              <h2 class="card-title">
+                <span class="card-title-icon">📊</span>
+                Real-Time Telemetry
+              </h2>
             </div>
 
             <div class="telemetry-row">
               <div class="metric-box">
-                <div class="metric-label">Detected Gesture</div>
+                <div class="metric-label">Gesture</div>
                 <div class="metric-val" id="telemetryGesture">NO HAND</div>
               </div>
               <div class="metric-box">
-                <div class="metric-label">Hand State</div>
+                <div class="metric-label">Hand Side</div>
                 <div class="metric-val" id="telemetryHand">--</div>
               </div>
             </div>
 
             <div class="telemetry-row">
               <div class="metric-box">
-                <div class="metric-label">Liveness Status</div>
-                <div class="metric-val" id="telemetryLiveness" style="font-size: 1.15rem; color: var(--text-muted);">IDLE</div>
+                <div class="metric-label">Liveness</div>
+                <div class="metric-val" id="telemetryLiveness" style="font-size:1rem; color:var(--text-muted);">IDLE</div>
               </div>
               <div class="metric-box">
                 <div class="metric-label">Biometric Match</div>
@@ -123,134 +146,196 @@
               </div>
             </div>
 
-            <div class="metric-box" style="margin-top: 0.5rem; text-align: left;">
-              <div class="metric-label">Candidate Match Identity</div>
-              <div id="telemetryCandidate" style="font-size: 1.1rem; font-weight: 600; color: #fff;">None</div>
+            <!-- Animated Similarity Arc Gauge -->
+            <div class="similarity-gauge-container">
+              <svg class="similarity-gauge" viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg">
+                <!-- Background arc -->
+                <path class="gauge-bg" d="M 15 70 A 50 50 0 0 1 105 70" fill="none" stroke-width="10" stroke-linecap="round"/>
+                <!-- Animated fill arc -->
+                <path class="gauge-fill" id="gaugeArc" d="M 15 70 A 50 50 0 0 1 105 70" fill="none" stroke-width="10" stroke-linecap="round"/>
+              </svg>
+              <div class="gauge-value" id="gaugeValue">0%</div>
+              <div class="gauge-label">Similarity Score</div>
+            </div>
+
+            <div class="metric-box" style="text-align:left; padding:0.85rem 1rem;">
+              <div class="metric-label">Identity Candidate</div>
+              <div id="telemetryCandidate"
+                   style="font-size:1.05rem; font-weight:700; color:#fff; margin-top:0.3rem; font-family:var(--font-mono);">None</div>
             </div>
           </div>
 
-          <!-- Access Granted / Denied Decision Banner -->
+          <div class="section-divider"></div>
+
+          <!-- Access Decision Banner -->
           <div id="decisionBanner" class="decision-banner decision-idle">
             System Standby
           </div>
         </div>
 
+      </div><!-- /auth-grid -->
+    </div><!-- /authTab -->
 
 
-      </div>
-    </div>
-
-    <!-- TAB 2: User Enrollment -->
-    <div id="registerTab" class="tab-panel">
+    <!-- ═══════════════════════════════════════════
+         TAB 2 — User Enrollment
+    ═══════════════════════════════════════════ -->
+    <div id="registerTab" class="tab-panel" role="tabpanel" aria-labelledby="tab-enroll">
       <div class="auth-grid">
-        
-        <!-- Registration Form & Instructions -->
+
+        <!-- Enrollment Form -->
         <div class="glass-card">
           <div class="card-header">
-            <h2 class="card-title"><span>👤</span> User Enrollment Wizard</h2>
+            <h2 class="card-title">
+              <span class="card-title-icon">👤</span>
+              User Enrollment Wizard
+            </h2>
           </div>
 
           <div class="form-group">
             <label class="form-label" for="regName">Full Name</label>
-            <input type="text" id="regName" class="form-input" placeholder="e.g. John Doe">
+            <input type="text" id="regName" class="form-input" placeholder="e.g. John Doe" autocomplete="name">
           </div>
 
           <div class="form-group">
             <label class="form-label" for="regEmail">Email Address</label>
-            <input type="email" id="regEmail" class="form-input" placeholder="e.g. john@college.edu">
+            <input type="email" id="regEmail" class="form-input" placeholder="e.g. john@university.edu" autocomplete="email">
           </div>
 
-          <div class="challenge-banner" style="margin-bottom: 1.25rem;">
-            <div class="challenge-prompt">
-              <span id="enrollProgressText">Ready to capture 10 hand biometric samples</span>
-              <span id="enrollSampleCount">0/10</span>
+          <div class="section-divider"></div>
+
+          <!-- Enrollment Progress -->
+          <div class="enroll-progress-card">
+            <div class="enroll-progress-header">
+              <span class="enroll-progress-label" id="enrollProgressText">Ready to capture 10 biometric samples</span>
+              <span class="enroll-count-badge" id="enrollSampleCount">0 / 10</span>
             </div>
             <div class="challenge-progress-bar">
-              <div id="enrollProgressBar" class="challenge-progress-fill" style="width: 0%;"></div>
+              <div id="enrollProgressBar" class="challenge-progress-fill" style="width:0%;"></div>
             </div>
           </div>
 
           <button class="btn btn-primary" id="startEnrollBtn" onclick="startEnrollment()">
             📸 Start Biometric Enrollment
           </button>
+
+          <!-- Enrollment Feedback -->
+          <div class="enroll-feedback" id="enrollFeedback">
+            <div class="feedback-indicator" id="enrollFeedbackIndicator"></div>
+            <span id="enrollFeedbackText">Hold your open palm steady in the frame with fingers spread during capture.</span>
+          </div>
+
+          <div class="mt-1" style="font-size:0.78rem; color:var(--text-muted); text-align:center; line-height:1.5;">
+            The system captures 10 biometric samples and computes an adaptive per-user threshold.
+          </div>
         </div>
 
         <!-- Enrollment Camera Preview -->
         <div class="glass-card">
           <div class="card-header">
-            <h2 class="card-title"><span>📷</span> Enrollment Camera Preview</h2>
+            <h2 class="card-title">
+              <span class="card-title-icon">📷</span>
+              Enrollment Camera Preview
+            </h2>
           </div>
           <div class="viewfinder-wrapper" style="aspect-ratio: 4/3;">
             <canvas id="enrollCanvas" class="viewfinder-feed"></canvas>
+            <canvas id="enrollHudCanvas" class="hud-overlay"></canvas>
+            <span class="vf-br-tr" aria-hidden="true"></span>
+            <span class="vf-br-bl" aria-hidden="true"></span>
           </div>
-          <p style="margin-top: 0.75rem; font-size: 0.82rem; color: var(--text-muted); text-align: center;">
-            Hold your open palm steady inside the frame with fingers spread during capture.
+          <p class="mt-1" style="font-size:0.78rem; color:var(--text-muted); text-align:center; line-height:1.5;">
+            The system will automatically collect samples when a valid hand is detected.
           </p>
         </div>
 
       </div>
-    </div>
+    </div><!-- /registerTab -->
 
-    <!-- TAB 3: Audit Logs & Database Management -->
-    <div id="logsTab" class="tab-panel">
-      <div class="glass-card" style="margin-bottom: 1.5rem;">
-        <div class="card-header">
-          <h2 class="card-title"><span>👥</span> Registered Biometric Users</h2>
-          <button class="btn btn-secondary" onclick="loadUsersTable()" style="width: auto; padding: 0.35rem 0.85rem; font-size: 0.8rem;">
-            🔄 Refresh Users
-          </button>
-        </div>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>User ID</th>
-                <th>Full Name</th>
-                <th>Email</th>
-                <th>Sample Count</th>
-                <th>Enrolled Date</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="usersTableBody">
-              <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Loading users...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
 
-      <div class="glass-card">
+    <!-- ═══════════════════════════════════════════
+         TAB 3 — Audit Logs & Database
+    ═══════════════════════════════════════════ -->
+    <div id="logsTab" class="tab-panel" role="tabpanel" aria-labelledby="tab-logs">
+
+      <!-- Registered Users -->
+      <div class="glass-card" style="margin-bottom:1.5rem;">
         <div class="card-header">
-          <h2 class="card-title"><span>📜</span> Authentication Audit Logs</h2>
-          <button class="btn btn-secondary" onclick="loadLogsTable()" style="width: auto; padding: 0.35rem 0.85rem; font-size: 0.8rem;">
-            🔄 Refresh Logs
-          </button>
+          <h2 class="card-title">
+            <span class="card-title-icon">👥</span>
+            Enrolled Biometric Users
+          </h2>
+          <div class="flex-row" style="gap: .5rem;">
+            <button class="btn btn-secondary" onclick="exportData('csv')"
+              style="width:auto; padding:0.38rem 0.9rem; font-size:0.78rem;">
+              📥 Export CSV
+            </button>
+            <button class="btn btn-secondary" onclick="exportData('json')"
+              style="width:auto; padding:0.38rem 0.9rem; font-size:0.78rem;">
+              📥 Export JSON
+            </button>
+            <button class="btn btn-secondary" onclick="loadUsersTable()"
+              style="width:auto; padding:0.38rem 0.9rem; font-size:0.78rem;">
+              🔄 Refresh
+            </button>
+          </div>
         </div>
         <div class="table-wrapper">
           <table>
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Timestamp</th>
-                <th>Identified User</th>
-                <th>Liveness</th>
-                <th>Similarity</th>
-                <th>Access Result</th>
-                <th>Reason</th>
+                <th>Full Name</th>
+                <th>Email</th>
+                <th>Samples</th>
+                <th>Enrolled</th>
+                <th>Actions</th>
               </tr>
             </thead>
-            <tbody id="logsTableBody">
-              <tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Loading logs...</td></tr>
+            <tbody id="usersTableBody">
+              <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:2rem;">Loading users…</td></tr>
             </tbody>
           </table>
         </div>
       </div>
-    </div>
+
+      <!-- Auth Logs -->
+      <div class="glass-card">
+        <div class="card-header">
+          <h2 class="card-title">
+            <span class="card-title-icon">📜</span>
+            Authentication Audit Log
+          </h2>
+          <button class="btn btn-secondary" onclick="loadLogsTable()"
+            style="width:auto; padding:0.38rem 0.9rem; font-size:0.78rem;">
+            🔄 Refresh
+          </button>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Timestamp</th>
+                <th>Identity</th>
+                <th>Liveness</th>
+                <th>Match %</th>
+                <th>Result</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody id="logsTableBody">
+              <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:2rem;">Loading logs…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /logsTab -->
+
   </main>
 
-  <footer>
-    <p>AI-Based Hand Biometric Authentication with Liveness Detection | Academic Project Demonstration</p>
-  </footer>
+ 
 
   <script src="/static/js/app.js"></script>
 </body>

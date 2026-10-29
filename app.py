@@ -5,13 +5,15 @@ biometric template enrollment, and audit logs.
 """
 
 import base64
+import csv
+import io
 import os
 import cv2
 import numpy as np
 from typing import List, Dict, Any, Optional
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -53,9 +55,8 @@ auth_biometric_frames: List[np.ndarray] = []
 # Enforces that the person held their hand steadily through the session.
 MIN_BIOMETRIC_FRAMES = 5
 
-# Stricter similarity threshold for authentication (higher than enrollment default).
-# Raising to 93% makes it significantly harder to impersonate another user.
-AUTH_SIMILARITY_THRESHOLD = 0.93
+# Similarity must be at least 90% for authentication to succeed.
+AUTH_SIMILARITY_THRESHOLD = 0.90
 
 
 # --- Pydantic Request Models ---
@@ -110,10 +111,15 @@ async def detect_preview(payload: FramePayload):
         if detection.has_hand:
             gesture = GestureClassifier.classify_gesture(detection.landmarks)
 
+        landmarks = detection.pixel_landmarks if detection.has_hand else []
+        bbox = list(detection.bbox) if (detection.has_hand and detection.bbox) else []
+
         return {
             "has_hand": detection.has_hand,
             "gesture": gesture,
             "handedness": detection.handedness,
+            "landmarks": landmarks,
+            "bbox": bbox,
             "annotated_image": encode_image_base64(annotated_frame)
         }
     except Exception as e:
@@ -250,11 +256,16 @@ async def process_auth_step(payload: FramePayload):
         auth_session = None
         auth_biometric_frames = []
 
+    landmarks = detection.pixel_landmarks if detection.has_hand else []
+    bbox = list(detection.bbox) if (detection.has_hand and detection.bbox) else []
+
     return {
         "annotated_image": encode_image_base64(annotated_frame),
         "has_hand": detection.has_hand,
         "gesture": gesture,
         "handedness": detection.handedness,
+        "landmarks": landmarks,
+        "bbox": bbox,
         "liveness_status": step_res.get("status", "IN_PROGRESS"),
         "instruction": step_res.get("instruction", ""),
         "target_title": step_res.get("target_title", ""),
@@ -298,9 +309,13 @@ async def enroll_sample(payload: FramePayload):
         }
 
     vec = LandmarkNormalizer.get_composite_biometric_vector(detection.landmarks)
+    landmarks = detection.pixel_landmarks if detection.has_hand else []
+    bbox = list(detection.bbox) if (detection.has_hand and detection.bbox) else []
     return {
         "sample_accepted": True,
         "vector": vec.tolist(),
+        "landmarks": landmarks,
+        "bbox": bbox,
         "annotated_image": encode_image_base64(annotated_frame)
     }
 
@@ -308,8 +323,9 @@ async def enroll_sample(payload: FramePayload):
 @app.post("/api/enroll-complete")
 async def enroll_complete(payload: EnrollCompletePayload):
     """
-    Aggregates collected sample vectors into an ultra-stable master template
-    and stores user record into SQLite.
+    Aggregates collected sample vectors into an ultra-stable master template,
+    computes an adaptive per-user similarity threshold (μ − 2σ of intra-sample
+    pairwise similarities), and stores both into SQLite.
     """
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="User name cannot be empty")
@@ -320,18 +336,23 @@ async def enroll_complete(payload: EnrollCompletePayload):
     sample_vecs = [np.array(v, dtype=np.float64) for v in payload.vectors]
     master_vec = BiometricMatcher.create_master_template(sample_vecs)
 
+    # Compute adaptive per-user threshold from enrollment sample variance
+    adaptive_threshold = BiometricMatcher.compute_adaptive_threshold(sample_vecs)
+
     user_id = db.add_user(
         name=payload.name.strip(),
         email=payload.email.strip() if payload.email else f"{payload.name.lower().replace(' ', '')}@college.edu",
         vector=master_vec,
-        sample_count=len(payload.vectors)
+        sample_count=len(payload.vectors),
+        threshold=adaptive_threshold
     )
 
     return {
         "status": "SUCCESS",
         "user_id": user_id,
         "name": payload.name,
-        "samples_enrolled": len(payload.vectors)
+        "samples_enrolled": len(payload.vectors),
+        "adaptive_threshold": f"{adaptive_threshold * 100:.1f}%"
     }
 
 
@@ -354,6 +375,67 @@ async def delete_user(user_id: int):
 async def get_logs(limit: int = 50):
     """Retrieves recent authentication attempts for the audit table."""
     return db.get_recent_logs(limit=limit)
+
+
+@app.get("/api/database")
+async def view_database():
+    """Returns the full database contents for inspection: enrolled users and all auth logs."""
+    users = db.get_all_users()
+    logs = db.get_recent_logs(limit=1000)
+    return {
+        "enrolled_users": users,
+        "total_users": len(users),
+        "auth_logs": logs,
+        "total_logs": len(logs)
+    }
+
+
+@app.get("/api/export")
+async def export_data(format: str = "json"):
+    """
+    Exports all database data (users + auth logs) in JSON or CSV format.
+    Use ?format=csv for downloadable CSV, or ?format=json for JSON.
+    """
+    data = db.export_all_data()
+
+    if format.lower() == "csv":
+        output = io.StringIO()
+        # -- Export Users CSV --
+        writer = csv.writer(output)
+        writer.writerow(["=== ENROLLED USERS ==="])
+        writer.writerow(["ID", "Name", "Email", "Samples", "Created At", "Updated At"])
+        for u in data["enrolled_users"]:
+            writer.writerow([
+                u.get("id", ""),
+                u.get("name", ""),
+                u.get("email", ""),
+                u.get("sample_count", ""),
+                u.get("created_at", ""),
+                u.get("updated_at", "")
+            ])
+        writer.writerow([])
+        writer.writerow(["=== AUTHENTICATION LOGS ==="])
+        writer.writerow(["ID", "Timestamp", "User ID", "User Name", "Liveness", "Similarity %", "Result", "Reason"])
+        for l in data["auth_logs"]:
+            writer.writerow([
+                l.get("id", ""),
+                l.get("timestamp", ""),
+                l.get("user_id", ""),
+                l.get("user_name", ""),
+                l.get("liveness_status", ""),
+                l.get("similarity_score", ""),
+                l.get("access_result", ""),
+                l.get("reason", "")
+            ])
+
+        output.seek(0)
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode("utf-8")),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=hand_auth_export.csv"}
+        )
+    else:
+        return JSONResponse(content=data)
 
 
 if __name__ == "__main__":

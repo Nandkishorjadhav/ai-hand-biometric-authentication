@@ -86,10 +86,23 @@ class HandDetector:
         )
         self.detector = vision.HandLandmarker.create_from_options(options)
 
-    def find_hand(self, frame: np.ndarray, draw: bool = True) -> Tuple[np.ndarray, HandDetectionResult]:
+    def find_hand(
+        self,
+        frame,
+        draw: bool = True,
+        is_mirrored: bool = True
+    ):
         """
         Processes a BGR image frame and detects the primary hand.
         Returns the annotated frame and HandDetectionResult.
+
+        Parameters:
+            frame: Input BGR image frame.
+            draw: Whether to render biometric HUD annotations.
+            is_mirrored: If True (default for selfie/webcam mirror feeds),
+                         inverts MediaPipe's reported handedness so that
+                         the user's physical Right hand is reported as 'Right',
+                         and physical Left hand is reported as 'Left'.
         """
         h, w, c = frame.shape
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -107,7 +120,12 @@ class HandDetector:
 
         handedness = "Hand"
         if detection_result.handedness and len(detection_result.handedness) > 0:
-            handedness = detection_result.handedness[0][0].category_name
+            raw_label = detection_result.handedness[0][0].category_name
+            if is_mirrored:
+                # In mirrored / selfie view, swap Left <-> Right to match user's perspective
+                handedness = "Right" if raw_label == "Left" else "Left"
+            else:
+                handedness = raw_label
 
         raw_landmarks = []
         pixel_landmarks = []

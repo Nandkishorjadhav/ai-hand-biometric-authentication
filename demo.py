@@ -66,6 +66,21 @@ def draw_banner_box(frame, message: str, subtext: str = "", color=(0, 220, 255),
         cv2.putText(frame, subtext, (x1 + 25, y1 + 68), cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 1, cv2.LINE_AA)
 
 
+def prompt_user_name_dialog() -> str:
+    """Non-blocking popup dialog to get user full name for enrollment without freezing OpenCV."""
+    try:
+        import tkinter as tk
+        from tkinter import simpledialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        name = simpledialog.askstring("Biometric Enrollment", "Enter User Full Name for Enrollment:", parent=root)
+        root.destroy()
+        return name.strip() if name else ""
+    except Exception:
+        return input("\nEnter User Full Name for enrollment: ").strip()
+
+
 def main():
     print("=" * 65)
     print("🖐️  HAND BIOMETRIC AUTHENTICATION SYSTEM (DESKTOP DEMO)")
@@ -214,7 +229,7 @@ def main():
                         enrolled = db.get_all_templates()
 
                         user_id, user_name, score_pct, is_match = BiometricMatcher.match_hand(
-                            query_vec, enrolled, threshold=0.88
+                            query_vec, enrolled, threshold=0.90
                         )
 
                         if is_match:
@@ -230,7 +245,7 @@ def main():
                             db.log_auth_attempt(user_id, candidate, "PASSED", score_pct, "ACCESS DENIED", f"Low biometric similarity ({score_pct:.1f}%)")
                             result_banner = {
                                 "title": "ACCESS DENIED // UNRECOGNIZED USER",
-                                "sub": f"Liveness: PASSED | Best Similarity: {score_pct:.1f}% (Below 88% threshold)",
+                                "sub": f"Liveness: PASSED | Best Similarity: {score_pct:.1f}% (Below 90% threshold)",
                                 "color": (0, 0, 255),
                                 "expire": now + 3.5
                             }
@@ -272,7 +287,7 @@ def main():
 
         elif key == ord('r') or key == ord('R'):
             if mode == "IDLE":
-                name_input = input("\nEnter User Full Name for enrollment: ").strip()
+                name_input = prompt_user_name_dialog()
                 if name_input:
                     reg_name = name_input
                     reg_samples = []

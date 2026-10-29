@@ -54,7 +54,7 @@ Unlike traditional fingerprint scanners that require physical contact, this syst
    └──────────┬────────────┘   └───────────┬────────────┘
               │                            │
               ▼                            ▼
-      Liveness = PASS              Similarity ≥ 88%
+      Liveness = PASS              Similarity ≥ 90%
               │                            │
               └──────────────┬─────────────┘
                              │
@@ -144,8 +144,8 @@ Static photos or phone screen replays cannot physically respond to randomized in
 ### 4. Biometric Feature Matching
 Once liveness passes, the system calculates **Cosine Similarity** between the live 71-element biometric vector $\vec{u}$ and enrolled templates $\vec{v}$:
 $$\text{Similarity}(\vec{u}, \vec{v}) = \frac{\vec{u} \cdot \vec{v}}{\|\vec{u}\|_2 \|\vec{v}\|_2}$$
-- **Threshold**: $\ge 88\%$ ($0.88$) indicates an authenticated match.
-- If similarity is below $88\%$, the user is treated as an unregistered impostor.
+- **Threshold**: $\ge 90\%$ ($0.90$) indicates an authenticated match.
+- If similarity is below $90\%$, the user is treated as an unregistered impostor.
 
 ---
 
