@@ -1,9 +1,3 @@
-"""
-FastAPI Web Application Server
-Exposes REST APIs for real-time video frame processing, liveness challenge orchestration,
-biometric template enrollment, and audit logs.
-"""
-
 import base64
 import csv
 import io
@@ -11,27 +5,23 @@ import os
 import cv2
 import numpy as np
 from typing import List, Dict, Any, Optional
-
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-
 from core.hand_detector import HandDetector
 from core.normalizer import LandmarkNormalizer
 from core.liveness import GestureClassifier, LivenessChallengeSession
 from core.matcher import BiometricMatcher
 from core.database import Database
 
-# Initialize FastAPI application
 app = FastAPI(
     title="Hand Biometric Authentication System",
     description="Contactless hand biometric verification with anti-spoofing liveness detection",
     version="1.0.0"
 )
 
-# Paths setup
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "web", "static")
 TEMPLATES_DIR = os.path.join(BASE_DIR, "web", "templates")
@@ -39,38 +29,23 @@ TEMPLATES_DIR = os.path.join(BASE_DIR, "web", "templates")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-# Core singletons
 db = Database(os.path.join(BASE_DIR, "hand_auth.db"))
 detector = HandDetector()
 
-# In-memory authentication session state
 auth_session: Optional[LivenessChallengeSession] = None
-
-# Accumulated biometric vectors sampled during active authentication session.
-# Collecting across ALL frames (not just the final one) makes the averaged
-# query template far more stable and harder to spoof by mimicry.
 auth_biometric_frames: List[np.ndarray] = []
-
-# Minimum frames with a detected hand required before a biometric decision is made.
-# Enforces that the person held their hand steadily through the session.
 MIN_BIOMETRIC_FRAMES = 5
 
-# Similarity must be at least 90% for authentication to succeed.
 AUTH_SIMILARITY_THRESHOLD = 0.90
 
-
-# --- Pydantic Request Models ---
 class FramePayload(BaseModel):
     image: str  # Base64 data URL
-
 
 class EnrollCompletePayload(BaseModel):
     name: str
     email: Optional[str] = ""
     vectors: List[List[float]]
 
-
-# --- Helper Utilities ---
 def decode_base64_image(base64_str: str) -> np.ndarray:
     """Decodes a base64 JPEG/PNG string into an OpenCV BGR numpy array."""
     if "," in base64_str:
@@ -89,14 +64,11 @@ def encode_image_base64(img: np.ndarray) -> str:
     return base64.b64encode(buffer).decode('utf-8')
 
 
-# --- Web Page Route ---
 @app.get("/", response_class=HTMLResponse)
 async def serve_dashboard(request: Request):
     """Serves the single-page biometric authentication dashboard."""
     return templates.TemplateResponse(request=request, name="index.html")
 
-
-# --- API Routes ---
 @app.post("/api/detect-preview")
 async def detect_preview(payload: FramePayload):
     """
@@ -153,16 +125,6 @@ async def cancel_auth_session():
 
 @app.post("/api/auth-step")
 async def process_auth_step(payload: FramePayload):
-    """
-    Processes an active authentication video frame:
-    1. Continuously accumulates biometric vectors from every frame where a hand is detected.
-    2. Checks dynamic gesture challenge for liveness.
-    3. If liveness PASSES, builds a noise-reduced averaged query template from all
-       accumulated frames and matches against the database.
-    4. Requires MIN_BIOMETRIC_FRAMES samples and AUTH_SIMILARITY_THRESHOLD to grant access.
-       This prevents impersonation via gesture mimicry because a multi-frame average
-       demands consistent hand morphology throughout the entire session, not just one frame.
-    """
     global auth_session, auth_biometric_frames
     if auth_session is None:
         raise HTTPException(status_code=400, detail="No active authentication session. Call /api/auth-start first.")
@@ -173,9 +135,6 @@ async def process_auth_step(payload: FramePayload):
     gesture = "NO HAND"
     if detection.has_hand:
         gesture = GestureClassifier.classify_gesture(detection.landmarks)
-        # ── CONTINUOUS BIOMETRIC ACCUMULATION ──────────────────────────────────
-        # Collect a biometric vector on EVERY frame with a detected hand.
-        # This produces a stable, noise-averaged template matching enrollment quality.
         vec = LandmarkNormalizer.get_composite_biometric_vector(detection.landmarks)
         auth_biometric_frames.append(vec)
         # ───────────────────────────────────────────────────────────────────────
@@ -191,7 +150,6 @@ async def process_auth_step(payload: FramePayload):
     # Render a high-visibility instruction HUD banner directly onto the video frame
     h, w, _ = annotated_frame.shape
     if step_res["status"] in ["IN_PROGRESS", "STEP_PASSED"]:
-        # Top banner background
         overlay = annotated_frame.copy()
         cv2.rectangle(overlay, (10, 10), (w - 10, 85), (15, 23, 42), -1)
         cv2.addWeighted(overlay, 0.85, annotated_frame, 0.15, 0, annotated_frame)
@@ -218,11 +176,7 @@ async def process_auth_step(payload: FramePayload):
         auth_biometric_frames = []
 
     elif step_res["status"] == "PASSED":
-        # ── MULTI-FRAME BIOMETRIC IDENTITY VERIFICATION ────────────────────────
-        # We need enough frames to build a stable averaged template.
         if len(auth_biometric_frames) >= MIN_BIOMETRIC_FRAMES:
-            # Average all accumulated frames → noise-reduced query template
-            # (mirrors the enrollment process which also averages multiple captures)
             stacked = np.array(auth_biometric_frames, dtype=np.float64)
             query_vec = np.mean(stacked, axis=0)
             norm = np.linalg.norm(query_vec)
@@ -247,11 +201,9 @@ async def process_auth_step(payload: FramePayload):
                 reason = f"Biometric mismatch — similarity {similarity_score}% is below {int(AUTH_SIMILARITY_THRESHOLD*100)}% threshold"
                 db.log_auth_attempt(user_id, candidate_name, "PASSED", similarity_score, "ACCESS DENIED", reason)
         else:
-            # Not enough frames collected — hand was not consistently present
             decision = "ACCESS DENIED"
             reason = f"Insufficient biometric data: only {len(auth_biometric_frames)} frames captured (minimum {MIN_BIOMETRIC_FRAMES} required)"
             db.log_auth_attempt(None, "Unknown", "PASSED", 0.0, "ACCESS DENIED", reason)
-        # ───────────────────────────────────────────────────────────────────────
 
         auth_session = None
         auth_biometric_frames = []
@@ -375,6 +327,11 @@ async def delete_user(user_id: int):
 async def get_logs(limit: int = 50):
     """Retrieves recent authentication attempts for the audit table."""
     return db.get_recent_logs(limit=limit)
+
+@app.get("/api/dashboard")
+async def get_dashboard():
+    """Returns aggregate metrics and recent activity for the operations dashboard."""
+    return db.get_dashboard_stats()
 
 
 @app.get("/api/database")

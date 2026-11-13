@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="AI-powered contactless hand biometric authentication with real-time liveness detection and spoof prevention.">
-  <title>HandAuth AI — Biometric Identity Platform</title>
-  <link rel="stylesheet" href="/static/css/style.css">
+  <title>HandAuth AI — Hand Biometric Authentication Platform</title>
+  <link rel="stylesheet" href="/static/css/style.css?v=3">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -32,7 +32,11 @@
 
   <!-- ─── Tab Navigation ─── -->
   <nav class="tabs-nav" role="tablist" aria-label="Main navigation">
-    <button class="tab-btn active" id="tab-auth" role="tab" aria-selected="true"
+    <button class="tab-btn active" id="tab-overview" role="tab" aria-selected="true"
+            aria-controls="overviewTab" onclick="switchTab('overviewTab')">
+      <span class="tab-icon">📈</span> Overview
+    </button>
+    <button class="tab-btn" id="tab-auth" role="tab" aria-selected="false"
             aria-controls="authTab" onclick="switchTab('authTab')">
       <span class="tab-icon">🔐</span> Live Authentication
     </button>
@@ -49,9 +53,55 @@
   <main>
 
     <!-- ═══════════════════════════════════════════
+         TAB 0 — Operations Overview
+    ═══════════════════════════════════════════ -->
+    <div id="overviewTab" class="tab-panel active" role="tabpanel" aria-labelledby="tab-overview">
+      <div class="page-heading">
+        <div>
+          <p class="eyebrow">SECURITY OPERATIONS CENTER</p>
+          <h2>Authentication Overview</h2>
+          <p class="page-subtitle">Monitor identity verification activity, enrollment coverage, and system confidence.</p>
+        </div>
+        <button class="btn btn-secondary refresh-dashboard-btn" onclick="loadDashboard()">↻ Refresh data</button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card"><span class="stat-icon">👥</span><span class="stat-label">Enrolled identities</span><strong id="statUsers">—</strong><small>Registered biometric profiles</small></div>
+        <div class="stat-card"><span class="stat-icon">🛡️</span><span class="stat-label">Verification success</span><strong id="statSuccess">—</strong><small id="statSuccessMeta">Across all attempts</small></div>
+        <div class="stat-card"><span class="stat-icon">⚡</span><span class="stat-label">Attempts today</span><strong id="statToday">—</strong><small>Local system time</small></div>
+        <div class="stat-card"><span class="stat-icon">🎯</span><span class="stat-label">Average match</span><strong id="statSimilarity">—</strong><small>Biometric similarity score</small></div>
+      </div>
+
+      <div class="overview-grid">
+        <div class="glass-card">
+          <div class="card-header"><h2 class="card-title"><span class="card-title-icon">📊</span>7-Day Verification Activity</h2><span class="status-chip">LIVE DATA</span></div>
+          <div id="activityChart" class="activity-chart"><div class="empty-state">Loading activity…</div></div>
+          <div class="chart-legend"><span><i class="legend-dot granted"></i> Granted</span><span><i class="legend-dot denied"></i> Denied</span></div>
+        </div>
+        <div class="glass-card">
+          <div class="card-header"><h2 class="card-title"><span class="card-title-icon">🧭</span>System Readiness</h2></div>
+          <div class="readiness-list">
+            <div class="readiness-row"><span><i class="readiness-dot ready"></i> Camera pipeline</span><b>READY</b></div>
+            <div class="readiness-row"><span><i class="readiness-dot ready"></i> Liveness engine</span><b>ACTIVE</b></div>
+            <div class="readiness-row"><span><i class="readiness-dot ready"></i> Biometric matcher</span><b>READY</b></div>
+            <div class="readiness-row"><span><i class="readiness-dot ready"></i> Audit database</span><b id="readinessAttempts">SYNCED</b></div>
+          </div>
+          <button class="btn btn-primary overview-action" onclick="switchTab('authTab')">⚡ Start live verification</button>
+        </div>
+      </div>
+
+      <div class="glass-card recent-card">
+        <div class="card-header"><h2 class="card-title"><span class="card-title-icon">🕒</span>Recent Activity</h2><button class="link-button" onclick="switchTab('logsTab')">View full audit log →</button></div>
+        <div class="table-wrapper recent-table-wrapper">
+          <table><thead><tr><th>Time</th><th>Identity</th><th>Result</th><th>Match</th><th>Reason</th></tr></thead><tbody id="recentActivityBody"><tr><td colspan="5" class="empty-state">Loading activity…</td></tr></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
          TAB 1 — Live Authentication
     ═══════════════════════════════════════════ -->
-    <div id="authTab" class="tab-panel active" role="tabpanel" aria-labelledby="tab-auth">
+    <div id="authTab" class="tab-panel" role="tabpanel" aria-labelledby="tab-auth">
       <div class="auth-grid">
 
         <!-- Left: Live Camera Viewfinder -->

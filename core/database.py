@@ -182,6 +182,42 @@ class Database:
         """, (limit,), fetch="all")
         return [dict(r) for r in rows]
 
+    def get_dashboard_stats(self) -> Dict[str, Any]:
+        """Returns aggregate metrics used by the operations dashboard."""
+        summary = self._execute("""
+        SELECT
+            COUNT(*) AS total_attempts,
+            COALESCE(SUM(CASE WHEN access_result = 'ACCESS GRANTED' THEN 1 ELSE 0 END), 0) AS granted_attempts,
+            COALESCE(AVG(similarity_score), 0) AS average_similarity,
+            COALESCE(SUM(CASE WHEN date(timestamp) = date('now', 'localtime') THEN 1 ELSE 0 END), 0) AS today_attempts
+        FROM auth_logs;
+        """, fetch="one")
+
+        trend_rows = self._execute("""
+        SELECT
+            date(timestamp, 'localtime') AS day,
+            COUNT(*) AS attempts,
+            COALESCE(SUM(CASE WHEN access_result = 'ACCESS GRANTED' THEN 1 ELSE 0 END), 0) AS granted
+        FROM auth_logs
+        WHERE timestamp >= datetime('now', 'localtime', '-6 days')
+        GROUP BY date(timestamp, 'localtime')
+        ORDER BY day ASC;
+        """, fetch="all")
+
+        total_attempts = int(summary["total_attempts"] or 0)
+        granted_attempts = int(summary["granted_attempts"] or 0)
+        return {
+            "total_users": int(self._execute("SELECT COUNT(*) AS count FROM users;", fetch="one")["count"]),
+            "total_attempts": total_attempts,
+            "granted_attempts": granted_attempts,
+            "denied_attempts": total_attempts - granted_attempts,
+            "success_rate": round((granted_attempts / total_attempts) * 100, 1) if total_attempts else 0,
+            "average_similarity": round(float(summary["average_similarity"] or 0), 1),
+            "today_attempts": int(summary["today_attempts"] or 0),
+            "trend": [dict(row) for row in trend_rows],
+            "recent_logs": self.get_recent_logs(limit=5)
+        }
+
     def export_all_data(self) -> Dict[str, Any]:
         """Exports all database data for CSV/JSON download."""
         users = self.get_all_users()
@@ -192,4 +228,3 @@ class Database:
             "auth_logs": logs,
             "total_logs": len(logs)
         }
-

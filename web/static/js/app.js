@@ -555,6 +555,49 @@ function switchTab(tabId) {
     loadUsersTable();
     loadLogsTable();
   }
+  if (tabId === 'overviewTab') loadDashboard();
+}
+
+async function loadDashboard() {
+  try {
+    const res = await fetch('/api/dashboard');
+    if (!res.ok) throw new Error('Dashboard request failed');
+    const data = await res.json();
+    const setText = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.innerText = value;
+    };
+    setText('statUsers', data.total_users);
+    setText('statSuccess', `${data.success_rate}%`);
+    setText('statSuccessMeta', `${data.granted_attempts} granted · ${data.denied_attempts} denied`);
+    setText('statToday', data.today_attempts);
+    setText('statSimilarity', `${data.average_similarity}%`);
+    setText('readinessAttempts', `${data.total_attempts} EVENTS`);
+
+    const trend = data.trend || [];
+    const maxAttempts = Math.max(...trend.map(day => day.attempts), 1);
+    const chart = document.getElementById('activityChart');
+    if (chart) {
+      chart.innerHTML = trend.length ? trend.map(day => {
+        const denied = day.attempts - day.granted;
+        const grantedHeight = (day.granted / maxAttempts) * 100;
+        const deniedHeight = (denied / maxAttempts) * 100;
+        const label = new Date(`${day.day}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
+        return `<div class="chart-column"><div class="chart-bars"><span class="bar denied" style="height:${Math.max(deniedHeight, denied ? 6 : 2)}%" title="${denied} denied"></span><span class="bar granted" style="height:${Math.max(grantedHeight, day.granted ? 6 : 2)}%" title="${day.granted} granted"></span></div><b>${day.attempts}</b><small>${label}</small></div>`;
+      }).join('') : '<div class="empty-state">No verification activity yet. Start an authentication session to populate this chart.</div>';
+    }
+
+    const recent = document.getElementById('recentActivityBody');
+    if (recent) {
+      recent.innerHTML = data.recent_logs.length ? data.recent_logs.map(log => `
+        <tr><td>${log.timestamp}</td><td class="table-strong">${log.user_name || 'Unknown'}</td>
+        <td><span class="tag-badge ${log.access_result === 'ACCESS GRANTED' ? 'tag-pass' : 'tag-fail'}">${log.access_result === 'ACCESS GRANTED' ? 'GRANTED' : 'DENIED'}</span></td>
+        <td>${log.similarity_score}%</td><td class="reason-cell">${log.reason || '--'}</td></tr>`).join('') :
+        '<tr><td colspan="5" class="empty-state">No authentication activity logged yet.</td></tr>';
+    }
+  } catch (err) {
+    console.error('Failed to load dashboard:', err);
+  }
 }
 
 // ── Database & Audit Logs ───────────────────────────────────────────────────
@@ -687,5 +730,6 @@ function exportData(format) {
 
 // Initialize on DOM Ready
 window.addEventListener('DOMContentLoaded', () => {
+  loadDashboard();
   initCamera();
 });
